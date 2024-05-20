@@ -26,6 +26,8 @@ jax.config.update("jax_enable_x64", True)
 @jax.jit
 def get_xCy(Nvec, T, sigmainv, x, y):
     # Get x^T C^{-1} y
+    # This won't work if we're using kernel ECORR
+    # (i.e., block-diagonal instead of diagonal white-noise matrix)
     Nx = jnp.array(x / Nvec)
     Ny = jnp.array(y / Nvec)
     TNx = jnp.dot(T.T, Nx)
@@ -78,7 +80,7 @@ def TimingModel(coefficients=False, name="linear_timing_model",
 def initialize_pta(psrs, noise, inc_cp=True, rn_comps=30, gwb_comps=30,
                    simple_wn=True):
     """
-    sim_wn_vals: Use an incredibly basic (EFAC=1.0) representation
+    simple_wn: Use an incredibly basic (EFAC=1.0) representation
     of white-noise, usually associated with simulated PTA datasets
     """
     Tspan = get_tspan(psrs)

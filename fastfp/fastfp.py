@@ -23,20 +23,10 @@ class Fp_jax(object):
     """
     Try to make a PyTree container for Fp-statistic calculation
     """
-    def __init__(self, psrs, pta, noise, phiinvs=None,
-                 TNTs=None, Ts=None, Nvecs=None, sigmainvs=None):
+    def __init__(self, psrs, pta, noise):
         self.psrs = psrs
         self.pta = pta
         self.noise = noise
-
-        self.toas = [psr.toas for psr in psrs]
-        self.residuals = [psr.residuals for psr in psrs]
-
-        self.phiinvs = phiinvs
-        self.TNTs = TNTs
-        self.Ts = Ts
-        self.Nvecs = Nvecs
-        self.sigmainvs = sigmainvs
     
     @jax.jit
     def calculate_Fp(self, fgw, Nvecs, TNTs, Ts, sigmainvs, toas, residuals):
