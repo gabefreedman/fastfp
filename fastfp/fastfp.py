@@ -23,17 +23,19 @@ class Fp_jax(object):
     """
     Try to make a PyTree container for Fp-statistic calculation
     """
-    def __init__(self, psrs, pta, noise):
+    def __init__(self, psrs, pta):
         self.psrs = psrs
         self.pta = pta
-        self.noise = noise
+
+        self.toas = [psr.toas for psr in psrs]
+        self.residuals = [psr.residuals for psr in psrs]
     
     @jax.jit
-    def calculate_Fp(self, fgw, Nvecs, TNTs, Ts, sigmainvs, toas, residuals):
+    def calculate_Fp(self, fgw, Nvecs, TNTs, Ts, sigmainvs):
         N = jnp.zeros(2)
         M = jnp.zeros((2,2))
         fstat = 0
-        for (Nvec, TNT, T, sigmainv, toa, resid) in zip(Nvecs, TNTs, Ts, sigmainvs, toas, residuals):
+        for (Nvec, TNT, T, sigmainv, toa, resid) in zip(Nvecs, TNTs, Ts, sigmainvs, self.toas, self.residuals):
             ntoa = toa.shape[0]
 
             A = jnp.zeros((2, ntoa))
@@ -55,7 +57,7 @@ class Fp_jax(object):
         return fstat
 
     def tree_flatten(self):
-        return (), (self.psrs, self.pta, self.noise)
+        return (), (self.psrs, self.pta)
     
     @classmethod
     def tree_unflatten(cls, aux_data, children):
