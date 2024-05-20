@@ -31,11 +31,11 @@ class Fp_jax(object):
         self.residuals = [psr.residuals for psr in psrs]
     
     @jax.jit
-    def calculate_Fp(self, fgw, Nvecs, TNTs, Ts, sigmainvs):
+    def calculate_Fp(self, fgw, Nvecs, Ts, sigmainvs):
         N = jnp.zeros(2)
         M = jnp.zeros((2,2))
         fstat = 0
-        for (Nvec, TNT, T, sigmainv, toa, resid) in zip(Nvecs, TNTs, Ts, sigmainvs, self.toas, self.residuals):
+        for (Nvec, T, sigmainv, toa, resid) in zip(Nvecs, Ts, sigmainvs, self.toas, self.residuals):
             ntoa = toa.shape[0]
 
             A = jnp.zeros((2, ntoa))
