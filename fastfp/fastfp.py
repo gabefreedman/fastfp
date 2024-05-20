@@ -8,7 +8,6 @@ a single matrix operation.
 Also since this utilizes JAX, it should (in theory) be easily
 portable to GPUs.
 """
-
 # JAX imports
 import jax
 import jax.numpy as jnp

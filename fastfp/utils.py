@@ -4,9 +4,6 @@ Module holding all the utility functions and other
 modifications to set up PTA objects and run an
 Fp-statistic analysis
 """
-
-# general imports
-
 # enterprise imports
 from enterprise.signals.parameter import Constant, function
 from enterprise.signals.white_signals import MeasurementNoise
@@ -15,7 +12,6 @@ from enterprise.signals.signal_base import PTA
 
 from enterprise_extensions.model_utils import get_tspan
 from enterprise_extensions.blocks import red_noise_block, common_red_noise_block, white_noise_block
-
 
 # jax imports
 import jax
