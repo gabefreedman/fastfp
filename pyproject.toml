@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "fastfp"
+version = "0.1.0"
+description = "Pulsar timing array Fp-statistic, now with JAX"
+authors = ["Gabe Freedman <freedma5@uwm.edu>"]
+license = "MIT license"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+enterprise-pulsar = "^3.3.3"
+jax = "^0.4.28"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
