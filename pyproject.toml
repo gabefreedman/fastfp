@@ -10,7 +10,7 @@ readme = "README.md"
 python = "^3.9"
 enterprise-pulsar = "^3.3.3"
 jax = "^0.4.28"
-
+jaxlib = "^0.4.28"
 
 [build-system]
 requires = ["poetry-core"]
