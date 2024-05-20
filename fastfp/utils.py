@@ -35,13 +35,11 @@ def get_xCy(Nvec, T, sigmainv, x, y):
     xNy = jnp.dot(x.T, Ny)
     return xNy - TNx @ sigmainv @ TNy
 
-def get_mats(psrs, pta, noise):
+def get_mats(pta, noise):
     """
     Precompute a bunch of matrix products or vectors
     that will be fed into the Fp-statistic object
     """
-    toas = [psr.toas for psr in psrs]
-    residuals = [psr.residuals for psr in psrs]
 
     phiinvs = pta.get_phiinv(noise)
     TNTs = pta.get_TNT(noise)
@@ -49,7 +47,7 @@ def get_mats(psrs, pta, noise):
     Ts = pta.get_basis(noise)
     sigmainvs = [jnp.linalg.pinv(TNT + jnp.diag(phiinv)) for TNT, phiinv in zip(TNTs, phiinvs)]
 
-    return phiinvs, TNTs, Nvecs, Ts, sigmainvs, toas, residuals
+    return Nvecs, Ts, sigmainvs
 
 
 # A small change to the TimingModel class suggested
