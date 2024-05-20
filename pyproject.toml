@@ -9,7 +9,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.9"
 enterprise-pulsar = "^3.3.3"
-enterprise_extensions = "^2.4.3"
+enterprise_extensions = "^2.4.2"
 jax = "^0.4.28"
 jaxlib = "^0.4.28"
 
