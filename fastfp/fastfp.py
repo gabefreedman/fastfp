@@ -19,18 +19,49 @@ from fastfp.utils import get_xCy
 
 @register_pytree_node_class
 class Fp_jax(object):
+    """Class for calculating the Fp-statistic, an incoherent
+    detection statistic for continuous gravitational searches
+    in pulsar timing array data. Follows the derivation in
+    Ellis, Siemens, and Creighton (2012). This is essentially a
+    rewrite of the :class:`enterprise_extensions.frequentist.FpStat`
+    class using JAX for the matrix operations.
+
+    :param psrs: A list of :class:`enterprise.pulsar.Pulsar` objects
+        containing pulsar TOAs and residuals
+    :type psrs: list
+    :param pta: An :class:`enterprise.signal_base.PTA` object loaded
+        with user-defined white- and red-noise signals, and
+        optionally any common-process red-noise signals
+    :type pta: :class:`enterprise.signal_base.PTA`
     """
-    Try to make a PyTree container for Fp-statistic calculation
-    """
+
     def __init__(self, psrs, pta):
+        """Constructor method
+        """
         self.psrs = psrs
         self.pta = pta
 
         self.toas = [psr.toas for psr in psrs]
         self.residuals = [psr.residuals for psr in psrs]
-    
+
     @jax.jit
     def calculate_Fp(self, fgw, Nvecs, Ts, sigmainvs):
+        """Calculate Fp value for a given GW frequency
+
+        :param fgw: Input GW frequency
+        :type fgw: float
+        :param Nvecs: List of per-pulsar white-noise covariance matrices
+        :type Nvecs: list
+        :param Ts: List of per-pulsar basis matrices for Gaussian-process
+            signals
+        :type Ts: list
+        :param sigmainvs: List of :math:`\Sigma^{-1}` defined as 
+            :math:`\Sigma^{-1} = (B^{-1} + T^{T}N^{-1}T)^{-1}`, with 
+            :math:`B` denoting the red-noise covariance matrix
+        :type sigmainvs: list
+        :return: :math:`F_{p}` value
+        :rtype: float
+        """
         N = jnp.zeros(2)
         M = jnp.zeros((2,2))
         fstat = 0
@@ -56,8 +87,12 @@ class Fp_jax(object):
         return fstat
 
     def tree_flatten(self):
+        """Method for flattening custom PyTree
+        """
         return (), (self.psrs, self.pta)
     
     @classmethod
     def tree_unflatten(cls, aux_data, children):
+        """Method for reconstructing custom PyTree
+        """
         return cls(*aux_data, *children)
