@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Fp-statistic calculation and its function dependencies
-but now all written in JAX. Allows for batching with jax.vmap,
-effectively turning the main loop over GW frequencies into
+Fp-statistic calculation and its function dependencies 
+but now all written in JAX. Allows for batching with jax.vmap, 
+effectively turning the main loop over GW frequencies into 
 a single matrix operation.
 
-Also since this utilizes JAX, it should (in theory) be easily
+Also since this utilizes JAX, it should (in theory) be easily 
 portable to GPUs.
 """
 # JAX imports
@@ -19,18 +19,18 @@ from fastfp.utils import get_xCy
 
 @register_pytree_node_class
 class Fp_jax(object):
-    """Class for calculating the Fp-statistic, an incoherent
-    detection statistic for continuous gravitational searches
-    in pulsar timing array data. Follows the derivation in
-    Ellis, Siemens, and Creighton (2012). This is essentially a
-    rewrite of the :class:`enterprise_extensions.frequentist.FpStat`
+    """Class for calculating the Fp-statistic, an incoherent 
+    detection statistic for continuous gravitational searches 
+    in pulsar timing array data. Follows the derivation in 
+    Ellis, Siemens, and Creighton (2012). This is essentially a 
+    rewrite of the :class:`enterprise_extensions.frequentist.FpStat` 
     class using JAX for the matrix operations.
 
-    :param psrs: A list of :class:`enterprise.pulsar.Pulsar` objects
+    :param psrs: A list of :class:`enterprise.pulsar.Pulsar` objects 
         containing pulsar TOAs and residuals
     :type psrs: list
-    :param pta: An :class:`enterprise.signal_base.PTA` object loaded
-        with user-defined white- and red-noise signals, and
+    :param pta: An :class:`enterprise.signal_base.PTA` object loaded 
+        with user-defined white- and red-noise signals, and 
         optionally any common-process red-noise signals
     :type pta: :class:`enterprise.signal_base.PTA`
     """
@@ -52,7 +52,7 @@ class Fp_jax(object):
         :type fgw: float
         :param Nvecs: List of per-pulsar white-noise covariance matrices
         :type Nvecs: list
-        :param Ts: List of per-pulsar basis matrices for Gaussian-process
+        :param Ts: List of per-pulsar basis matrices for Gaussian-process 
             signals
         :type Ts: list
         :param sigmainvs: List of :math:`\Sigma^{-1}` defined as 

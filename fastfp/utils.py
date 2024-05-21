@@ -21,9 +21,27 @@ jax.config.update("jax_enable_x64", True)
 
 @jax.jit
 def get_xCy(Nvec, T, sigmainv, x, y):
-    # Get x^T C^{-1} y
-    # This won't work if we're using kernel ECORR
-    # (i.e., block-diagonal instead of diagonal white-noise matrix)
+    """Compute :math:`x^{T}C^{-1}y`, where
+    :math:`C = N + TBT^{T}`. This function does
+    not apply for the case where :math:`N` is block-diagonal
+    (i.e., ECORR modeled as white-noise)
+
+    :param Nvec: White-noise covariance matrix for a single pulsar
+    :type Nvec: array-like
+    :param T: Concatenated basis matrices for Gaussian-process signals 
+        for a single pulsar
+    :type T: array-like
+    :param sigmainv: :math:`\Sigma^{-1} = (B^{-1} + T^{T}N^{-1}T)^{-1}` 
+        for a single pulsar, with :math:`B` denoting the red-noise 
+        covariance matrix
+    :type sigmainv: array-like
+    :param x: Input vector
+    :type x: array-like
+    :param y: Another input vector
+    :type y: array-like
+    :return: :math:`x^{T}C^{-1}y`
+    :rtype: float
+    """
     Nx = jnp.array(x / Nvec)
     Ny = jnp.array(y / Nvec)
     TNx = jnp.dot(T.T, Nx)
@@ -32,9 +50,18 @@ def get_xCy(Nvec, T, sigmainv, x, y):
     return xNy - TNx @ sigmainv @ TNy
 
 def get_mats(pta, noise):
-    """
-    Precompute a bunch of matrix products or vectors
-    that will be fed into the Fp-statistic object
+    """Precompute a bunch of matrix products or vectors 
+    that are needed for the Fp-statistic calculation
+
+    :param pta: An :class:`enterprise.signal_base.PTA` object
+    :type pta: :class:`enterprise.signal_base.PTA`
+    :param noise: Dictionary containing values for all noise parameters 
+        in the input PTA object
+    :type noise: dict
+    :return: tuple (Nvecs, Ts, sigmainvs), containing the necessary 
+        noise covariance and basis matrices for calculating an 
+        :math:`F_{p}`-statistic
+    :rtype: tuple
     """
 
     phiinvs = pta.get_phiinv(noise)
@@ -54,7 +81,8 @@ def tm_prior(weights, toas, variance=1e-14):
 
 def TimingModel(coefficients=False, name="linear_timing_model",
                 use_svd=False, normed=True, prior_variance=1e-14):
-    """Class factory for linear timing model signals."""
+    """Class factory for linear timing model signals.
+    """
 
     basis = get_timing_model_basis(use_svd, normed)
     prior = tm_prior(variance=prior_variance)
@@ -69,13 +97,34 @@ def TimingModel(coefficients=False, name="linear_timing_model",
     return TimingModel
 
 
-# Main function for creating PTA object
-# with desired signal properties
 def initialize_pta(psrs, noise, inc_cp=True, rn_comps=30, gwb_comps=30,
                    simple_wn=True):
     """
     simple_wn: Use an incredibly basic (EFAC=1.0) representation
     of white-noise, usually associated with simulated PTA datasets
+
+    :param psrs: A list of :class:`enterprise.pulsar.Pulsar` objects
+    :type psrs: list
+    :param noise: Dictionary containing values for all noise parameters 
+        in the input PTA object
+    :type noise: dict
+    :param inc_cp: Include a common-process red-noise signal, currently 
+        implemented as uncorrelated, defaults to `True`
+    :type inc_cp: bool, optional
+    :param rn_comps: Number of frequencies for per-pulsar red-noise 
+        model, defaults to 30
+    :type rn_comps: int, optional
+    :param gwb_comps: Number of frequencies for common-process 
+        red-noise model, defaults to 30
+    :type gwb_comps: int, optional
+    :param simple_wn: Flag for setting per-pulsar white-noise 
+        model to an incredibly simple EFAC=1.0 signal, defaults to 
+        `True`. This is occasionally a choice when making a large 
+        suite of simulated PTA datasets for exploratory analyses
+    :type simple_wn: bool, optional
+    :return: An :class:`enterprise.signal_base.PTA` object with
+        full input signal model and noise dictionary
+    :rtype: :class:`enterprise.signal_base.PTA`
     """
     Tspan = get_tspan(psrs)
     tm = TimingModel(use_svd=True)
