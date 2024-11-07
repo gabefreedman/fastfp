@@ -45,7 +45,7 @@ class Fp_jax(object):
         self.residuals = [psr.residuals for psr in psrs]
 
     @jax.jit
-    def calculate_Fp(self, fgw, Nvecs, Ts, sigmainvs):
+    def calculate_Fp(self, fgw, Nvecs, Ts, sigmas):
         """Calculate Fp value for a given GW frequency
 
         :param fgw: Input GW frequency
@@ -55,34 +55,33 @@ class Fp_jax(object):
         :param Ts: List of per-pulsar basis matrices for Gaussian-process 
             signals
         :type Ts: list
-        :param sigmainvs: List of :math:`\Sigma^{-1}` defined as 
-            :math:`\Sigma^{-1} = (B^{-1} + T^{T}N^{-1}T)^{-1}`, with 
+        :param sigmas: List of :math:`\Sigma` defined as 
+            :math:`\Sigma = B^{-1} + T^{T}N^{-1}T`, with 
             :math:`B` denoting the red-noise covariance matrix
-        :type sigmainvs: list
+        :type sigmas: list
         :return: :math:`F_{p}` value
         :rtype: float
         """
         N = jnp.zeros(2)
         M = jnp.zeros((2,2))
         fstat = 0
-        for (Nvec, T, sigmainv, toa, resid) in zip(Nvecs, Ts, sigmainvs, self.toas, self.residuals):
+        for (Nvec, T, sigma, toa, resid) in zip(Nvecs, Ts, sigmas, self.toas, self.residuals):
             ntoa = toa.shape[0]
 
             A = jnp.zeros((2, ntoa))
             A = A.at[0, :].set(1 / fgw ** (1 / 3) * jnp.sin(2 * jnp.pi * fgw * toa))
             A = A.at[1, :].set(1 / fgw ** (1 / 3) * jnp.cos(2 * jnp.pi * fgw * toa))
 
-            ip1 = get_xCy(Nvec, T, sigmainv, A[0, :], resid)
-            ip2 = get_xCy(Nvec, T, sigmainv, A[1, :], resid)
+            ip1 = get_xCy(Nvec, T, sigma, A[0, :], resid)
+            ip2 = get_xCy(Nvec, T, sigma, A[1, :], resid)
             N = jnp.array([ip1, ip2])
 
-            M = M.at[0,0].set(get_xCy(Nvec, T, sigmainv, A[0,:], A[0,:]))
-            M = M.at[0,1].set(get_xCy(Nvec, T, sigmainv, A[0,:], A[1,:]))
-            M = M.at[1,0].set(get_xCy(Nvec, T, sigmainv, A[1,:], A[0,:]))
-            M = M.at[1,1].set(get_xCy(Nvec, T, sigmainv, A[1,:], A[1,:]))
+            M = M.at[0,0].set(get_xCy(Nvec, T, sigma, A[0,:], A[0,:]))
+            M = M.at[0,1].set(get_xCy(Nvec, T, sigma, A[0,:], A[1,:]))
+            M = M.at[1,0].set(get_xCy(Nvec, T, sigma, A[1,:], A[0,:]))
+            M = M.at[1,1].set(get_xCy(Nvec, T, sigma, A[1,:], A[1,:]))
 
-            Minv = jnp.linalg.pinv(M)
-            fstat += 0.5 * jnp.dot(N, jnp.dot(Minv, N))
+            fstat += 0.5 * jnp.dot(N, jnp.linalg.solve(M, N))
 
         return fstat
 
