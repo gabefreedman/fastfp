@@ -20,7 +20,7 @@ jax.config.update("jax_enable_x64", True)
 
 
 @jax.jit
-def get_xCy(Nvec, T, sigmainv, x, y):
+def get_xCy(Nvec, T, sigma, x, y):
     """Compute :math:`x^{T}C^{-1}y`, where
     :math:`C = N + TBT^{T}`. This function does
     not apply for the case where :math:`N` is block-diagonal
@@ -31,10 +31,10 @@ def get_xCy(Nvec, T, sigmainv, x, y):
     :param T: Concatenated basis matrices for Gaussian-process signals 
         for a single pulsar
     :type T: array-like
-    :param sigmainv: :math:`\Sigma^{-1} = (B^{-1} + T^{T}N^{-1}T)^{-1}` 
+    :param sigma: :math:`\Sigma = B^{-1} + T^{T}N^{-1}T` 
         for a single pulsar, with :math:`B` denoting the red-noise 
         covariance matrix
-    :type sigmainv: array-like
+    :type sigma: array-like
     :param x: Input vector
     :type x: array-like
     :param y: Another input vector
@@ -47,7 +47,7 @@ def get_xCy(Nvec, T, sigmainv, x, y):
     TNx = jnp.dot(T.T, Nx)
     TNy = jnp.dot(T.T, Ny)
     xNy = jnp.dot(x.T, Ny)
-    return xNy - TNx @ sigmainv @ TNy
+    return xNy - TNx @ jnp.linalg.solve(sigma, TNy)
 
 def get_mats(pta, noise):
     """Precompute a bunch of matrix products or vectors 
@@ -58,7 +58,7 @@ def get_mats(pta, noise):
     :param noise: Dictionary containing values for all noise parameters 
         in the input PTA object
     :type noise: dict
-    :return: tuple (Nvecs, Ts, sigmainvs), containing the necessary 
+    :return: tuple (Nvecs, Ts, sigmas), containing the necessary 
         noise covariance and basis matrices for calculating an 
         :math:`F_{p}`-statistic
     :rtype: tuple
@@ -68,9 +68,9 @@ def get_mats(pta, noise):
     TNTs = pta.get_TNT(noise)
     Nvecs = pta.get_ndiag(noise)
     Ts = pta.get_basis(noise)
-    sigmainvs = [jnp.linalg.pinv(TNT + jnp.diag(phiinv)) for TNT, phiinv in zip(TNTs, phiinvs)]
+    sigmas = [(TNT + jnp.diag(phiinv)) for TNT, phiinv in zip(TNTs, phiinvs)]
 
-    return Nvecs, Ts, sigmainvs
+    return Nvecs, Ts, sigmas
 
 
 # A small change to the TimingModel class suggested
