@@ -32,6 +32,8 @@ class NMFP(object):
         self.residuals = [psr.residuals for psr in psrs]
 
     def __call__(self, fgw, samples, Nvecs, Ts, TNTs):
+        """Callable method
+        """
         return self.calculate_nmfp(fgw, samples, Nvecs, Ts, TNTs)
 
     @jax.jit

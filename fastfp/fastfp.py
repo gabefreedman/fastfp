@@ -43,6 +43,11 @@ class Fp_jax(object):
 
         self.toas = [psr.toas for psr in psrs]
         self.residuals = [psr.residuals for psr in psrs]
+    
+    def __call__(self, fgw, Nvecs, Ts, sigmas):
+        """Callable method
+        """
+        return self.calculate_Fp(fgw, Nvecs, Ts, sigmas)
 
     @jax.jit
     def calculate_Fp(self, fgw, Nvecs, Ts, sigmas):
