@@ -31,17 +31,15 @@ class NMFP(object):
         self.toas = [psr.toas for psr in psrs]
         self.residuals = [psr.residuals for psr in psrs]
 
+    def __call__(self, fgw, samples, Nvecs, Ts, TNTs):
+        return self.calculate_nmfp(fgw, samples, Nvecs, Ts, TNTs)
+
     @jax.jit
     def _get_sigmas(self, pars, TNTs):
-        # sigma is (2 x ncomp, 2 x ncomp), hardcoding to 60 for now
         sigmas = []
         for i, (rn_sig, TNT) in enumerate(zip(self.rn_sigs, TNTs)):
             phiinv = rn_sig.get_phiinv(pars)
             sigmas.append(TNT + jnp.diag(phiinv))
-        # sigmas = jnp.zeros((len(self.psrs), 60, 60))
-        # for i, (rn_sig, TNT) in enumerate(zip(self.rn_sigs, TNTs)):
-        # phiinv = rn_sig.get_phiinv(pars)
-        # sigmas = sigmas.at[i,:,:].set(TNT + jnp.diag(phiinv))
         return sigmas
 
     @jax.jit
