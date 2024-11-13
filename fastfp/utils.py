@@ -54,9 +54,9 @@ def get_xCy(Nvec, T, sigma, x, y):
     return xNy - TNx @ jnp.linalg.solve(sigma, TNy)
 
 
-def get_mats(pta, noise):
+def get_mats_fp(pta, noise):
     """Precompute a bunch of matrix products or vectors
-    that are needed for the Fp-statistic calculation
+    that are needed for the base Fp-statistic calculation
 
     :param pta: An :class:`enterprise.signal_base.PTA` object
     :type pta: :class:`enterprise.signal_base.PTA`
@@ -76,6 +76,29 @@ def get_mats(pta, noise):
     sigmas = [(TNT + jnp.diag(phiinv)) for TNT, phiinv in zip(TNTs, phiinvs)]
 
     return Nvecs, Ts, sigmas
+
+
+def get_mats_nmfp(pta, noise):
+    """Precompute a bunch of matrix products or vectors
+    that are needed for the noise-marginalized Fp-statistic
+    calculation
+
+    :param pta: An :class:`enterprise.signal_base.PTA` object
+    :type pta: :class:`enterprise.signal_base.PTA`
+    :param noise: Dictionary containing values for all noise parameters
+        in the input PTA object
+    :type noise: dict
+    :return: tuple (TNTs, Nvecs, Ts), containing the necessary
+        noise covariance matrices and matrix products for calculating
+        :math:`F_{p}`-statistic
+    :rtype: tuple
+    """
+
+    TNTs = pta.get_TNT(noise)
+    Nvecs = pta.get_ndiag(noise)
+    Ts = pta.get_basis(noise)
+
+    return TNTs, Nvecs, Ts
 
 
 # A small change to the TimingModel class suggested

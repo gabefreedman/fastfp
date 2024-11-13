@@ -13,12 +13,14 @@ import numpy as np
 import jax
 
 from fastfp.fastfp import FastFp
-from fastfp.utils import initialize_pta, get_mats
+from fastfp.utils import initialize_pta, get_mats_fp
 
 
 def main(psrfile, noisefile, savefile):
     """
-    savefile: name for json file containing output Fp-stat values
+    psrfile: path to pickle file containing pulsar data
+    noisefile: path to json file containing noise dictionary
+    savefile: path for json file containing output Fp-stat values
     """
     # setup logging
     logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
@@ -46,7 +48,7 @@ def main(psrfile, noisefile, savefile):
 
     # precompute important matrix products
     t_start = time.perf_counter()
-    Nvecs, Ts, sigmas = get_mats(pta, noise)
+    Nvecs, Ts, sigmas = get_mats_fp(pta, noise)
     t_end = time.perf_counter()
     logger.info("Precompute matrix wall time: {0:.4f} s".format(t_end - t_start))
 
