@@ -52,7 +52,7 @@ class NMFP(object):
 
     @jax.jit
     def _get_sigmas(self, pars, TNTs):
-        """Calculate :math:`\Sigma = B^{-1} + T^{T}N^{-1}T`, the
+        """Calculate :math:`\\Sigma = B^{-1} + T^{T}N^{-1}T`, the
         portion of the total noise covariance that changes during
         updates of the red noise.
 
@@ -60,7 +60,7 @@ class NMFP(object):
         :type pars: dict
         :param TNTs: List of :math:`T^{T}N^{-1}T` matrices for each pulsar
         :type TNTs: list
-        :return: :math:`\Sigma` matrix for each pulsar
+        :return: :math:`\\Sigma` matrix for each pulsar
         :type: list
         """
         sigmas = []

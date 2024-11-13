@@ -35,7 +35,7 @@ def get_xCy(Nvec, T, sigma, x, y):
     :param T: Concatenated basis matrices for Gaussian-process signals
         for a single pulsar
     :type T: array-like
-    :param sigma: :math:`\Sigma = B^{-1} + T^{T}N^{-1}T`
+    :param sigma: :math:`\\Sigma = B^{-1} + T^{T}N^{-1}T`
         for a single pulsar, with :math:`B` denoting the red-noise
         covariance matrix
     :type sigma: array-like

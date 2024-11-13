@@ -59,8 +59,8 @@ class FastFp(object):
         :param Ts: List of per-pulsar basis matrices for Gaussian-process
             signals
         :type Ts: list
-        :param sigmas: List of :math:`\Sigma` defined as
-            :math:`\Sigma = B^{-1} + T^{T}N^{-1}T`, with
+        :param sigmas: List of :math:`\\Sigma` defined as
+            :math:`\\Sigma = B^{-1} + T^{T}N^{-1}T`, with
             :math:`B` denoting the red-noise covariance matrix
         :type sigmas: list
         :return: :math:`F_{p}` value
