@@ -132,7 +132,7 @@ def main(
     for i in range(nbatches):
         start = i * batch_size
         end = start + batch_size
-        samples_batched.append(map_params(pta, rns_full[:, idxs[start:end]]))
+        samples_batched.append(map_params(pta, rns_full[:, np.arange(start:end)]))
 
     # double vmap: one for frequencies and one for red noise realizations
     t_start = time.perf_counter()
