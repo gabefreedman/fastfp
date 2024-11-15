@@ -1,18 +1,45 @@
-[tool.poetry]
-name = "fastfp"
-version = "0.1.0"
-description = "Pulsar timing array Fp-statistic, now with JAX"
-authors = ["Gabe Freedman <freedma5@uwm.edu>"]
-license = "MIT license"
-readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.9"
-enterprise-pulsar = "^3.3.3"
-enterprise_extensions = "^2.4.2"
-jax = "^0.4.28"
-jaxlib = "^0.4.28"
-
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["flit_core >= 3.4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "fastfp"
+authors = [{name = "Gabe Freedman", email = "freedma5@uwm.edu"}]
+description = "JAX implementation of pulsar timing Fp-statistic"
+readme = "README.md"
+classifiers = ["License :: OSI Approved :: MIT License"]
+dynamic = ["version"]
+requires-python = ">=3.9"
+dependencies = [
+    "jax[cpu]",
+    "jaxlib",
+    "enterprise-pulsar",
+    "enterprise_extensions",
+    "tqdm"
+]
+
+[project.optional-dependencies]
+
+dev = [
+    "black",
+    "flake8",
+    "flake8-pyprojecttoml"
+]
+
+gpu = [
+    "jax[cuda12]"
+]
+
+[tool.flake8]
+max-line-length = 120
+exclude = [
+    "__pycache",
+    ".git",
+    ".ipynb_checkpoints",
+    ".tox",
+    ".venv",
+    "build",
+    "dist",
+    "docs",
+    "venv",
+]
