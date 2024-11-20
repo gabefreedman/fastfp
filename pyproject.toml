@@ -33,7 +33,7 @@ gpu = [
 [tool.flake8]
 max-line-length = 120
 exclude = [
-    "__pycache",
+    "__pycache__",
     ".git",
     ".ipynb_checkpoints",
     ".tox",
