@@ -118,7 +118,8 @@ def main(
     logger.info(f"Precompute matrix wall time: {time.perf_counter() - t_start:.2f} s")
 
     # set array of CW frequencies
-    freqs = jnp.linspace(2e-9, 3e-7, ncwfreqs + 1)
+    tspan = get_tspan(psrs)
+    freqs = jnp.arange(1, ncwfreqs + 1) / tspan
 
     # generate array of RN samples
     nbatches = int(nsamples / batch_size)
@@ -140,7 +141,7 @@ def main(
     vmap_g = jax.vmap(vmap_f, in_axes=(None, 0, None, None, None))
     nmfp_batched = []
     for i in range(nbatches):
-        nmfp_batched.append(vmap_g(freqs[1:], samples_batched[i], Nvecs, Ts, TNTs))
+        nmfp_batched.append(vmap_g(freqs, samples_batched[i], Nvecs, Ts, TNTs))
     nmfp_vals = np.vstack(nmfp_batched)
     logger.info(
         f"Noise marginalized Fp-statistic wall time: {time.perf_counter() - t_start:.2f} s"
