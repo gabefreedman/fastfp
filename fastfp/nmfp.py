@@ -29,12 +29,14 @@ class NMFP(object):
     The per-pulsar red-noise signals are kept in a set of separate
     classes written as JAX Pytrees. This allows the red-noise covariance
     update step of the noise-marginalization process to be JIT-compiled.
+    Common red-noise signals are stored similarly in their own containers.
 
     :param psrs: A list of :class:`enterprise.pulsar.Pulsar` objects
         containing pulsar TOAs and residuals
     :type psrs: list
     :param rn_sigs: A list of :class:`fastfp.nmfp.RN_container` objects
-        containing the per-pulsar red-noise signals
+        containing the per-pulsar red-noise signals and possibly a common
+        uncorrelated red-noise process
     :type rn_sigs: list
     """
 
@@ -128,7 +130,8 @@ class NMFP(object):
 class RN_container(object):
     """
     Container class for storing and updating per-pulsar
-    red-noise covariance matrices
+    red-noise covariance matrices. If CURN_container is provided,
+    it will get added to all RN_container phi matrices at runtime.
 
     :param psr: A single pulsar data container
     :type psr: :class:`enterprise.pulsar.Pulsar`
@@ -143,12 +146,28 @@ class RN_container(object):
     :param tm_marg: Flag for turning on the marginalizing of the
         timing model
     :type tm_marg: bool, optional
+    :param add_curn: Flag for adding a common uncorrelated red-noise
+        process to the model
+    :type add_curn: bool, optional
+    :param curn_container: A :class:`fastfp.nmfp.CURN_container` object
+        containing the common uncorrelated red-noise process
+    :type curn_container: :class:`fastfp.nmfp.CURN_container`, optional
     """
 
-    def __init__(self, psr, Ffreqs=None, ncomps=30, tm_marg=False):
+    def __init__(
+        self,
+        psr,
+        Ffreqs=None,
+        ncomps=30,
+        tm_marg=False,
+        add_curn=False,
+        curn_container=None,
+    ):
         self.psr = psr
         self.ncomps = ncomps
         self.tm_marg = tm_marg
+        self.add_curn = add_curn
+        self.curn_container = curn_container
 
         self.rn_A_name = f"{psr.name}_red_noise_log10_A"
         self.rn_gam_name = f"{psr.name}_red_noise_gamma"
@@ -158,10 +177,16 @@ class RN_container(object):
         else:
             self.Ffreqs = self._create_freqarray(psr, ncomps=ncomps)
 
-        # need larger phi matrix if using non-marginalized timing model
+        # set the correct form of the get_phi function
+        # based on what signals are present
         if not tm_marg:
             self.weights = jnp.ones(psr.Mmat.shape[1])
-            self.phi_fn = self.get_phi_rn_tm
+            if add_curn:
+                self.phi_fn = self.get_phi_rn_tm_curn
+            else:
+                self.phi_fn = self.get_phi_rn_tm
+        elif add_curn:
+            self.phi_fn = self.get_phi_rn_curn
         else:
             self.phi_fn = self.get_phi_rn
 
@@ -200,15 +225,35 @@ class RN_container(object):
             * jnp.repeat(df, 2)
         )
 
+    ##################################################
+    # Various forms of the red-noise covariance matrix
+    ##################################################
     @jax.jit
     def get_phi_rn(self, pars):
         return self._powerlaw(pars)
 
     @jax.jit
+    def get_phi_rn_curn(self, pars):
+        rn_phi = self._powerlaw(pars)
+        curn_phi = self.curn_container.get_phi_curn(pars)
+        return rn_phi.at[: curn_phi.shape[0]].add(curn_phi)
+
+    @jax.jit
     def get_phi_rn_tm(self, pars):
         rn_phi = self._powerlaw(pars)
-        tm_phi = self.weights * 1e40
+        tm_phi = (
+            self.weights * 1e-14 * len(self.psr.toas)
+        )  # variance 1e-14 from utils.py
         return jnp.concatenate((tm_phi, rn_phi))
+
+    @jax.jit
+    def get_phi_rn_tm_curn(self, pars):
+        rn_phi = self._powerlaw(pars)
+        tm_phi = (
+            self.weights * 1e-14 * len(self.psr.toas)
+        )  # variance 1e-14 from utils.py
+        curn_phi = self.curn_container.get_phi_curn(pars)
+        return jnp.concatenate((tm_phi, rn_phi.at[: curn_phi.shape[0]].add(curn_phi)))
 
     @jax.jit
     def update_phi(self, pars):
@@ -235,11 +280,93 @@ class RN_container(object):
 
     def tree_flatten(self):
         """Method for flattening custom PyTree"""
-        return (self.Ffreqs,), (self.psr, self.ncomps, self.tm_marg)
+        return (self.Ffreqs,), (
+            self.psr,
+            self.ncomps,
+            self.tm_marg,
+            self.add_curn,
+            self.curn_container,
+        )
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         """Method for reconstructing custom PyTree"""
-        psr, ncomps, tm_marg = aux_data
+        psr, ncomps, tm_marg, add_curn, curn_container = aux_data
         (Ffreqs,) = children
-        return cls(psr, Ffreqs, ncomps, tm_marg)
+        return cls(psr, Ffreqs, ncomps, tm_marg, add_curn, curn_container)
+
+
+@register_pytree_node_class
+class CURN_container(object):
+    """
+    Container class for storing and updating common
+    uncorrelated red-noise covariance matrices
+
+    :param Ffreqs: Array of Fourier frequencies for red-noise
+        basis model.
+    :type Ffreqs: array-like
+    """
+
+    def __init__(self, Ffreqs):
+
+        self.rn_A_name = "gw_log10_A"
+        self.rn_gam_name = "gw_gamma"
+
+        self.Ffreqs = Ffreqs
+
+        self.phi_fn = self.get_phi_curn
+
+    @jax.jit
+    def _powerlaw(self, pars):
+        """Power-law model for red-noise PSD.
+
+        :param pars: Dictionary of noise parameters
+        :type pars: dict
+        :return: Power-law model evaluated for input parameters
+        :rtype: array-like
+        """
+        df = jnp.diff(jnp.concatenate((jnp.array([0]), self.Ffreqs[::2])))
+        return (
+            self.Ffreqs ** (-pars[self.rn_gam_name])
+            * (10 ** pars[self.rn_A_name]) ** 2
+            / 12.0
+            / jnp.pi**2
+            * const.fyr ** (pars[self.rn_gam_name] - 3)
+            * jnp.repeat(df, 2)
+        )
+
+    @jax.jit
+    def get_phi_curn(self, pars):
+        return self._powerlaw(pars)
+
+    @jax.jit
+    def update_phi(self, pars):
+        """Calculate red-noise prior covariance matrix.
+
+        :param pars: Dictionary of noise parameters
+        :type pars: dict
+        :return: Red-noise prior covariance matrix
+        :rtype: array-like
+        """
+        return self.phi_fn(pars)
+
+    @jax.jit
+    def get_phiinv(self, pars):
+        """Calculate inverse of red-noise prior covariance matrix.
+
+        :param pars: Dictionary of noise parameters
+        :type pars: dict
+        :return: Inverse of red-noise prior covariance matrix
+        :rtype: array-like
+        """
+        phi = self.update_phi(pars)
+        return 1.0 / phi
+
+    def tree_flatten(self):
+        """Method for flattening custom PyTree"""
+        return (self.Ffreqs,), ()
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        """Method for reconstructing custom PyTree"""
+        return cls(*aux_data, *children)

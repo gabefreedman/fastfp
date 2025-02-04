@@ -20,7 +20,7 @@ import jax
 import jax.numpy as jnp
 
 # fastfp imports
-from fastfp.nmfp import NMFP, RN_container
+from fastfp.nmfp import NMFP, RN_container, CURN_container
 from fastfp.utils import initialize_pta, get_mats_nmfp
 
 
@@ -35,21 +35,42 @@ def create_freqarray(Tspan, ncomps=30):
     return Ffreqs
 
 
-def setup_fp_model(psrs, Tspan=None, nrncomps=30):
+def setup_fp_model(psrs, Tspan=None, inc_cp=False, nrncomps=30, ngwbcomps=30):
     """Create the NMFP object and its component red-noise containers.
     If Tspan is None, the red-noise bases are set inidividually. If
     Tspan is a set value, all pulsar red noises bases are set to be
     the same.
     """
+    if inc_cp:
+        Tspan = get_tspan(psrs)
+        Ffreqs_curn = create_freqarray(Tspan, ncomps=ngwbcomps)
+        curn_obj = CURN_container(Ffreqs_curn)
+
     if not Tspan:
         Ffreqs = []
         for psr in psrs:
             Tspan = np.max(psr.toas) - np.min(psr.toas)
             Ffreqs.append(create_freqarray(Tspan, ncomps=nrncomps))
-        rn_objs = [RN_container(psr, Ffreqs=Ffreqs[i]) for i, psr in enumerate(psrs)]
+        if inc_cp:
+            rn_objs = [
+                RN_container(
+                    psr, Ffreqs=Ffreqs[i], add_curn=True, curn_container=curn_obj
+                )
+                for i, psr in enumerate(psrs)
+            ]
+        else:
+            rn_objs = [
+                RN_container(psr, Ffreqs=Ffreqs[i]) for i, psr in enumerate(psrs)
+            ]
     else:
         Ffreqs = create_freqarray(Tspan, ncomps=nrncomps)
-        rn_objs = [RN_container(psr, Ffreqs=Ffreqs) for psr in psrs]
+        if inc_cp:
+            rn_objs = [
+                RN_container(psr, Ffreqs=Ffreqs, add_curn=True, curn_container=curn_obj)
+                for psr in psrs
+            ]
+        else:
+            rn_objs = [RN_container(psr, Ffreqs=Ffreqs) for psr in psrs]
 
     nmfp = NMFP(psrs, rn_objs)
     return nmfp
@@ -75,6 +96,9 @@ def main(
     noisefile,
     chainfile,
     savefile,
+    inc_cp=False,
+    nrncomps=30,
+    ngwbcomps=30,
     ncwfreqs=100,
     nsamples=1000,
     batch_size=100,
@@ -103,14 +127,20 @@ def main(
 
     # if including a CURN or other CP, we should
     # set those parameters in the noise dictionary
-    # here they are set to what I used in some simulations
+    # this creates the keys for the CURN parameters
+    # in the dictionary, then they can be adjusted
+    # within the NMFP calculations
     noise["gw_gamma"] = 13 / 3
     noise["gw_log10_A"] = np.log10(2e-15)
 
     # create PTA and NMFP object
     Tspan = get_tspan(psrs)
-    pta = initialize_pta(psrs, noise, inc_cp=False)
-    nmfp = setup_fp_model(psrs, Tspan=Tspan)
+    pta = initialize_pta(
+        psrs, noise, inc_cp=inc_cp, rn_comps=nrncomps, gwb_comps=ngwbcomps
+    )
+    nmfp = setup_fp_model(
+        psrs, Tspan=Tspan, inc_cp=inc_cp, nrncomps=nrncomps, ngwbcomps=ngwbcomps
+    )
 
     # precompute some matrices
     t_start = time.perf_counter()
@@ -118,8 +148,7 @@ def main(
     logger.info(f"Precompute matrix wall time: {time.perf_counter() - t_start:.2f} s")
 
     # set array of CW frequencies
-    tspan = get_tspan(psrs)
-    freqs = jnp.arange(1, ncwfreqs + 1) / tspan
+    freqs = jnp.arange(1, ncwfreqs + 1) / Tspan
 
     # generate array of RN samples
     nbatches = int(nsamples / batch_size)
@@ -160,6 +189,21 @@ if __name__ == "__main__":
     parser.add_argument("chainfile", type=str, help="filepath for MCMC chain")
     parser.add_argument(
         "savefile", type=str, help="filepath for output Fp values array"
+    )
+    parser.add_argument("--inc_cp", action="store_true", help="include CURN process")
+    parser.add_argument(
+        "--nrncomps",
+        type=int,
+        default=30,
+        required=False,
+        help="number of intrinsic red noise components",
+    )
+    parser.add_argument(
+        "--ngwbcomps",
+        type=int,
+        default=30,
+        required=False,
+        help="number of CURN components",
     )
     parser.add_argument(
         "--ncwfreqs",
