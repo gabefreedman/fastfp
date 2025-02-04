@@ -20,7 +20,7 @@ import jax
 import jax.numpy as jnp
 
 # fastfp imports
-from fastfp.nmfp import NMFP, RN_container
+from fastfp.nmfp import NMFP, RN_container, CURN_container
 from fastfp.utils import initialize_pta, get_mats_nmfp
 
 
@@ -35,21 +35,42 @@ def create_freqarray(Tspan, ncomps=30):
     return Ffreqs
 
 
-def setup_fp_model(psrs, Tspan=None, nrncomps=30):
+def setup_fp_model(psrs, Tspan=None, nrncomps=30, add_curn=False, ngwbcomps=30):
     """Create the NMFP object and its component red-noise containers.
     If Tspan is None, the red-noise bases are set inidividually. If
     Tspan is a set value, all pulsar red noises bases are set to be
     the same.
     """
+    if add_curn:
+        Tspan = get_tspan(psrs)
+        Ffreqs_curn = create_freqarray(Tspan, ncomps=ngwbcomps)
+        curn_obj = CURN_container(Ffreqs_curn)
+
     if not Tspan:
         Ffreqs = []
         for psr in psrs:
             Tspan = np.max(psr.toas) - np.min(psr.toas)
             Ffreqs.append(create_freqarray(Tspan, ncomps=nrncomps))
-        rn_objs = [RN_container(psr, Ffreqs=Ffreqs[i]) for i, psr in enumerate(psrs)]
+        if add_curn:
+            rn_objs = [
+                RN_container(
+                    psr, Ffreqs=Ffreqs[i], add_curn=True, curn_container=curn_obj
+                )
+                for i, psr in enumerate(psrs)
+            ]
+        else:
+            rn_objs = [
+                RN_container(psr, Ffreqs=Ffreqs[i]) for i, psr in enumerate(psrs)
+            ]
     else:
         Ffreqs = create_freqarray(Tspan, ncomps=nrncomps)
-        rn_objs = [RN_container(psr, Ffreqs=Ffreqs) for psr in psrs]
+        if add_curn:
+            rn_objs = [
+                RN_container(psr, Ffreqs=Ffreqs, add_curn=True, curn_container=curn_obj)
+                for psr in psrs
+            ]
+        else:
+            rn_objs = [RN_container(psr, Ffreqs=Ffreqs) for psr in psrs]
 
     nmfp = NMFP(psrs, rn_objs)
     return nmfp
