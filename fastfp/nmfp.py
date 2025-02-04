@@ -6,8 +6,8 @@ multiple noise realization (or draws from an MCMC chain).
 Can be run on GPUs for accelerated Fp-statistic calculations.
 """
 # relative imports
-import fastfp.fastfp.constants as const
-from fastfp.fastfp.utils import get_xCy
+import fastfp.constants as const
+from fastfp.utils import get_xCy
 
 # JAX imports
 import jax
@@ -146,7 +146,15 @@ class RN_container(object):
     :type tm_marg: bool, optional
     """
 
-    def __init__(self, psr, Ffreqs=None, ncomps=30, tm_marg=False, add_curn=False, curn_container=None):
+    def __init__(
+        self,
+        psr,
+        Ffreqs=None,
+        ncomps=30,
+        tm_marg=False,
+        add_curn=False,
+        curn_container=None,
+    ):
         self.psr = psr
         self.ncomps = ncomps
         self.tm_marg = tm_marg
@@ -211,25 +219,29 @@ class RN_container(object):
     @jax.jit
     def get_phi_rn(self, pars):
         return self._powerlaw(pars)
-    
+
     @jax.jit
     def get_phi_rn_curn(self, pars):
         rn_phi = self._powerlaw(pars)
         curn_phi = self.curn_container.get_phi_curn(pars)
-        return rn_phi.at[:curn_phi.shape[0]].add(curn_phi)
+        return rn_phi.at[: curn_phi.shape[0]].add(curn_phi)
 
     @jax.jit
     def get_phi_rn_tm(self, pars):
         rn_phi = self._powerlaw(pars)
-        tm_phi = self.weights * 1e-14 * len(self.psr.toas) # variance 1e-14 from utils.py
+        tm_phi = (
+            self.weights * 1e-14 * len(self.psr.toas)
+        )  # variance 1e-14 from utils.py
         return jnp.concatenate((tm_phi, rn_phi))
-    
+
     @jax.jit
     def get_phi_rn_tm_curn(self, pars):
         rn_phi = self._powerlaw(pars)
-        tm_phi = self.weights * 1e-14 * len(self.psr.toas) # variance 1e-14 from utils.py
+        tm_phi = (
+            self.weights * 1e-14 * len(self.psr.toas)
+        )  # variance 1e-14 from utils.py
         curn_phi = self.curn_container.get_phi_curn(pars)
-        return jnp.concatenate((tm_phi, rn_phi.at[:curn_phi.shape[0]].add(curn_phi)))
+        return jnp.concatenate((tm_phi, rn_phi.at[: curn_phi.shape[0]].add(curn_phi)))
 
     @jax.jit
     def update_phi(self, pars):
@@ -256,7 +268,13 @@ class RN_container(object):
 
     def tree_flatten(self):
         """Method for flattening custom PyTree"""
-        return (self.Ffreqs,), (self.psr, self.ncomps, self.tm_marg, self.add_curn, self.curn_container)
+        return (self.Ffreqs,), (
+            self.psr,
+            self.ncomps,
+            self.tm_marg,
+            self.add_curn,
+            self.curn_container,
+        )
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
@@ -289,13 +307,12 @@ class CURN_container(object):
 
     def __init__(self, Ffreqs):
 
-        self.rn_A_name = f"gw_log10_A"
-        self.rn_gam_name = f"gw_gamma"
+        self.rn_A_name = "gw_log10_A"
+        self.rn_gam_name = "gw_gamma"
 
         self.Ffreqs = Ffreqs
 
         self.phi_fn = self.get_phi_curn
-
 
     @jax.jit
     def _powerlaw(self, pars):
