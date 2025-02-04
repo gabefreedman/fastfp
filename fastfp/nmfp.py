@@ -29,12 +29,14 @@ class NMFP(object):
     The per-pulsar red-noise signals are kept in a set of separate
     classes written as JAX Pytrees. This allows the red-noise covariance
     update step of the noise-marginalization process to be JIT-compiled.
+    Common red-noise signals are stored similarly in their own containers.
 
     :param psrs: A list of :class:`enterprise.pulsar.Pulsar` objects
         containing pulsar TOAs and residuals
     :type psrs: list
     :param rn_sigs: A list of :class:`fastfp.nmfp.RN_container` objects
-        containing the per-pulsar red-noise signals
+        containing the per-pulsar red-noise signals and possibly a common
+        uncorrelated red-noise process
     :type rn_sigs: list
     """
 
@@ -144,6 +146,12 @@ class RN_container(object):
     :param tm_marg: Flag for turning on the marginalizing of the
         timing model
     :type tm_marg: bool, optional
+    :param add_curn: Flag for adding a common uncorrelated red-noise
+        process to the model
+    :type add_curn: bool, optional
+    :param curn_container: A :class:`fastfp.nmfp.CURN_container` object
+        containing the common uncorrelated red-noise process
+    :type curn_container: :class:`fastfp.nmfp.CURN_container`, optional
     """
 
     def __init__(
@@ -169,7 +177,8 @@ class RN_container(object):
         else:
             self.Ffreqs = self._create_freqarray(psr, ncomps=ncomps)
 
-        # need larger phi matrix if using non-marginalized timing model
+        # set the correct form of the get_phi function
+        # based on what signals are present
         if not tm_marg:
             self.weights = jnp.ones(psr.Mmat.shape[1])
             if add_curn:
@@ -216,6 +225,9 @@ class RN_container(object):
             * jnp.repeat(df, 2)
         )
 
+    ##################################################
+    # Various forms of the red-noise covariance matrix
+    ##################################################
     @jax.jit
     def get_phi_rn(self, pars):
         return self._powerlaw(pars)
@@ -290,19 +302,9 @@ class CURN_container(object):
     Container class for storing and updating common
     uncorrelated red-noise covariance matrices
 
-    :param psr: A single pulsar data container
-    :type psr: :class:`enterprise.pulsar.Pulsar`
     :param Ffreqs: Array of Fourier frequencies for red-noise
-        basis model. (Note: if not provided, frequencies will
-        be calculated using input pulsar's TOAs, and the calculation
-        will be later be JIT-compiled along with any FP-statistic
-        calculations, which will slow down runtime.)
-    :type Ffreqs: array-like, optional.
-    :param ncomps: Number of Fourier components for red-noise model
-    :type ncomps: int, optional
-    :param tm_marg: Flag for turning on the marginalizing of the
-        timing model
-    :type tm_marg: bool, optional
+        basis model.
+    :type Ffreqs: array-like
     """
 
     def __init__(self, Ffreqs):
