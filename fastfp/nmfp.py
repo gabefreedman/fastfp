@@ -241,17 +241,13 @@ class RN_container(object):
     @jax.jit
     def get_phi_rn_tm(self, pars):
         rn_phi = self._powerlaw(pars)
-        tm_phi = (
-            self.weights * 1e-14 * len(self.psr.toas)
-        )  # variance 1e-14 from utils.py
+        tm_phi = self.weights * 1e40
         return jnp.concatenate((tm_phi, rn_phi))
 
     @jax.jit
     def get_phi_rn_tm_curn(self, pars):
         rn_phi = self._powerlaw(pars)
-        tm_phi = (
-            self.weights * 1e-14 * len(self.psr.toas)
-        )  # variance 1e-14 from utils.py
+        tm_phi = self.weights * 1e40
         curn_phi = self.curn_container.get_phi_curn(pars)
         return jnp.concatenate((tm_phi, rn_phi.at[: curn_phi.shape[0]].add(curn_phi)))
 
