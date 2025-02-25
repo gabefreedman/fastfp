@@ -4,9 +4,9 @@ modifications to set up PTA objects and run an
 Fp-statistic analysis
 """
 # enterprise imports
-from enterprise.signals.parameter import Constant, function
+from enterprise.signals.parameter import Constant
 from enterprise.signals.white_signals import MeasurementNoise
-from enterprise.signals.gp_signals import BasisGP, get_timing_model_basis
+from enterprise.signals.gp_signals import TimingModel
 from enterprise.signals.signal_base import PTA
 
 from enterprise_extensions.model_utils import get_tspan
@@ -101,36 +101,16 @@ def get_mats_nmfp(pta, noise):
     return TNTs, Nvecs, Ts
 
 
-# A small change to the TimingModel class suggested
-# by Aaron and Shashwat that adds a variance kwarg
-@function
-def tm_prior(weights, toas, variance=1e-14):
-    return weights * variance * len(toas)
-
-
-def TimingModel(
-    coefficients=False,
-    name="linear_timing_model",
-    use_svd=False,
-    normed=True,
-    prior_variance=1e-14,
+def initialize_pta(
+    psrs,
+    noise,
+    inc_cp=True,
+    rn_comps=30,
+    gwb_comps=30,
+    simple_wn=True,
+    inc_ecorr=False,
+    select="backend",
 ):
-    """Class factory for linear timing model signals."""
-
-    basis = get_timing_model_basis(use_svd, normed)
-    prior = tm_prior(variance=prior_variance)
-
-    BaseClass = BasisGP(prior, basis, coefficients=coefficients, name=name)
-
-    class TimingModel(BaseClass):
-        signal_type = "basis"
-        signal_name = "linear timing model"
-        signal_id = name + "_svd" if use_svd else name
-
-    return TimingModel
-
-
-def initialize_pta(psrs, noise, inc_cp=True, rn_comps=30, gwb_comps=30, simple_wn=True):
     """
     simple_wn: Use an incredibly basic (EFAC=1.0) representation
     of white-noise, usually associated with simulated PTA datasets
@@ -154,6 +134,10 @@ def initialize_pta(psrs, noise, inc_cp=True, rn_comps=30, gwb_comps=30, simple_w
         `True`. This is occasionally a choice when making a large
         suite of simulated PTA datasets for exploratory analyses
     :type simple_wn: bool, optional
+    :param inc_ecorr: Include ECORR white-noise signal model
+    :type inc_ecorr: bool, optional
+    :param select: per-backend selection of white-noise parameters
+    :type select: str, optional
     :return: An :class:`enterprise.signal_base.PTA` object with
         full input signal model and noise dictionary
     :rtype: :class:`enterprise.signal_base.PTA`
@@ -163,8 +147,10 @@ def initialize_pta(psrs, noise, inc_cp=True, rn_comps=30, gwb_comps=30, simple_w
     if simple_wn:
         efac = Constant(1.0)
         wn = MeasurementNoise(efac=efac)
+    elif inc_ecorr:
+        wn = white_noise_block(inc_ecorr=True, gp_ecorr=True, select=select)
     else:
-        wn = white_noise_block(inc_ecorr=True, gp_ecorr=True)
+        wn = white_noise_block(inc_ecorr=False, gp_ecorr=False, select=select)
     rn = red_noise_block(Tspan=Tspan, components=rn_comps)
     # full signal
     s = tm + wn + rn

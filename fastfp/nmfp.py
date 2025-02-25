@@ -9,6 +9,8 @@ Can be run on GPUs for accelerated Fp-statistic calculations.
 import fastfp.constants as const
 from fastfp.utils import get_xCy
 
+import numpy as np
+
 # JAX imports
 import jax
 import jax.numpy as jnp
@@ -143,9 +145,11 @@ class RN_container(object):
     :type Ffreqs: array-like, optional.
     :param ncomps: Number of Fourier components for red-noise model
     :type ncomps: int, optional
-    :param tm_marg: Flag for turning on the marginalizing of the
-        timing model
-    :type tm_marg: bool, optional
+    :param gp_ecorr: Flag for adding a GP modeled ECORR process
+    :type gp_ecorr: bool, optional
+    :param ecorr_container: A :class:`fastfp.nmfp.GPEcorr_container` object
+        containing the ECORR process
+    :type ecorr_container: :class:`fastfp.nmfp.GPEcorr_container`, optional
     :param add_curn: Flag for adding a common uncorrelated red-noise
         process to the model
     :type add_curn: bool, optional
@@ -159,13 +163,15 @@ class RN_container(object):
         psr,
         Ffreqs=None,
         ncomps=30,
-        tm_marg=False,
+        gp_ecorr=False,
+        ecorr_container=None,
         add_curn=False,
         curn_container=None,
     ):
         self.psr = psr
         self.ncomps = ncomps
-        self.tm_marg = tm_marg
+        self.gp_ecorr = gp_ecorr
+        self.ecorr_container = ecorr_container
         self.add_curn = add_curn
         self.curn_container = curn_container
 
@@ -177,18 +183,20 @@ class RN_container(object):
         else:
             self.Ffreqs = self._create_freqarray(psr, ncomps=ncomps)
 
+        self.tm_weights = jnp.ones(psr.Mmat.shape[1])
+
         # set the correct form of the get_phi function
         # based on what signals are present
-        if not tm_marg:
-            self.weights = jnp.ones(psr.Mmat.shape[1])
-            if add_curn:
-                self.phi_fn = self.get_phi_rn_tm_curn
+        if add_curn:
+            if gp_ecorr:
+                self.phi_fn = self.get_phi_tm_ecorr_rn_curn
             else:
-                self.phi_fn = self.get_phi_rn_tm
-        elif add_curn:
-            self.phi_fn = self.get_phi_rn_curn
+                self.phi_fn = self.get_phi_tm_rn_curn
         else:
-            self.phi_fn = self.get_phi_rn
+            if gp_ecorr:
+                self.phi_fn = self.get_phi_tm_ecorr_rn
+            else:
+                self.phi_fn = self.get_phi_tm_rn
 
     def _create_freqarray(self, psr, ncomps=30):
         """Create array of Fourier frequencies for red-noise model. Uses
@@ -239,17 +247,49 @@ class RN_container(object):
         return rn_phi.at[: curn_phi.shape[0]].add(curn_phi)
 
     @jax.jit
-    def get_phi_rn_tm(self, pars):
+    def get_phi_ecorr_rn(self, pars):
         rn_phi = self._powerlaw(pars)
-        tm_phi = self.weights * 1e40
+        ecorr_phi = self.ecorr_container.get_phi(pars)
+        return jnp.concatenate((ecorr_phi, rn_phi))
+
+    @jax.jit
+    def get_phi_ecorr_rn_curn(self, pars):
+        rn_phi = self._powerlaw(pars)
+        ecorr_phi = self.ecorr_container.get_phi(pars)
+        curn_phi = self.curn_container.get_phi_curn(pars)
+        return jnp.concatenate(
+            (ecorr_phi, rn_phi.at[: curn_phi.shape[0]].add(curn_phi))
+        )
+
+    @jax.jit
+    def get_phi_tm_rn(self, pars):
+        rn_phi = self._powerlaw(pars)
+        tm_phi = self.tm_weights * 1e40
         return jnp.concatenate((tm_phi, rn_phi))
 
     @jax.jit
-    def get_phi_rn_tm_curn(self, pars):
+    def get_phi_tm_rn_curn(self, pars):
         rn_phi = self._powerlaw(pars)
-        tm_phi = self.weights * 1e40
+        tm_phi = self.tm_weights * 1e40
         curn_phi = self.curn_container.get_phi_curn(pars)
         return jnp.concatenate((tm_phi, rn_phi.at[: curn_phi.shape[0]].add(curn_phi)))
+
+    @jax.jit
+    def get_phi_tm_ecorr_rn(self, pars):
+        rn_phi = self._powerlaw(pars)
+        tm_phi = self.tm_weights * 1e40
+        ecorr_phi = self.ecorr_container.get_phi(pars)
+        return jnp.concatenate((tm_phi, ecorr_phi, rn_phi))
+
+    @jax.jit
+    def get_phi_tm_ecorr_rn_curn(self, pars):
+        rn_phi = self._powerlaw(pars)
+        tm_phi = self.tm_weights * 1e40
+        ecorr_phi = self.ecorr_container.get_phi(pars)
+        curn_phi = self.curn_container.get_phi_curn(pars)
+        return jnp.concatenate(
+            (tm_phi, ecorr_phi, rn_phi.at[: curn_phi.shape[0]].add(curn_phi))
+        )
 
     @jax.jit
     def update_phi(self, pars):
@@ -279,7 +319,8 @@ class RN_container(object):
         return (self.Ffreqs,), (
             self.psr,
             self.ncomps,
-            self.tm_marg,
+            self.gp_ecorr,
+            self.ecorr_container,
             self.add_curn,
             self.curn_container,
         )
@@ -287,9 +328,17 @@ class RN_container(object):
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         """Method for reconstructing custom PyTree"""
-        psr, ncomps, tm_marg, add_curn, curn_container = aux_data
+        psr, ncomps, gp_ecorr, ecorr_container, add_curn, curn_container = aux_data
         (Ffreqs,) = children
-        return cls(psr, Ffreqs, ncomps, tm_marg, add_curn, curn_container)
+        return cls(
+            psr,
+            Ffreqs,
+            ncomps,
+            gp_ecorr,
+            ecorr_container,
+            add_curn,
+            curn_container,
+        )
 
 
 @register_pytree_node_class
@@ -365,4 +414,64 @@ class CURN_container(object):
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         """Method for reconstructing custom PyTree"""
+        return cls(*aux_data, *children)
+
+
+@register_pytree_node_class
+class GPEcorr_container(object):
+    """
+    Container class for storing correlated white-noise
+    signals modeled as Gaussian processes.
+
+    :param psr: A single pulsar data container
+    :type psr: :class:`enterprise.pulsar.Pulsar`
+    :param weights: Array of quantization weights for ECORR noise
+    :type weights: array-like
+    :param fix_wn_vals: Dictionary of fixed white-noise values
+    :type fix_wn_vals: dict
+    """
+
+    def __init__(self, psr, weights, fix_wn_vals=None):
+        self.psr = psr
+        self.weights = weights
+        self.fix_wn_vals = fix_wn_vals
+
+        self._select_by_backend(psr, fix_wn_vals)
+
+        self._init_phi()
+
+    def _select_by_backend(self, psr, fix_wn_vals):
+        backends = np.unique(psr.backend_flags)
+        self.ecorrs = jnp.zeros(backends.shape[0])
+
+        for i, val in enumerate(backends):
+            self.ecorrs = self.ecorrs.at[i].set(
+                fix_wn_vals["_".join([psr.name, "basis", "ecorr", val, "log10_ecorr"])]
+            )
+
+        return
+
+    def _init_phi(self):
+        """Precalculate ECORR phi matrix, it will remain fixed."""
+        phislcs = []
+        for i, ecorr in enumerate(self.ecorrs):
+            phislcs.append(self.weights[i] * 10 ** (2 * ecorr))
+
+        self._phi = jnp.concatenate(phislcs)
+        self._get_phi = self.get_phi
+
+    @jax.jit
+    def get_phi(self, pars):
+        """Return fixed component of phi matrix for ECORR signal
+        
+        :param pars: Dictionary of noise parameters
+        :type pars: dict
+        """
+        return self._phi
+
+    def tree_flatten(self):
+        return (), (self.psr, self.weights, self.fix_wn_vals)
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
         return cls(*aux_data, *children)

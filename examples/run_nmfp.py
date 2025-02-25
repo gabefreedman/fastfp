@@ -20,7 +20,7 @@ import jax
 import jax.numpy as jnp
 
 # fastfp imports
-from fastfp.nmfp import NMFP, RN_container, CURN_container
+from fastfp.nmfp import NMFP, RN_container, CURN_container, GPEcorr_container
 from fastfp.utils import initialize_pta, get_mats_nmfp
 
 
@@ -35,42 +35,133 @@ def create_freqarray(Tspan, ncomps=30):
     return Ffreqs
 
 
-def setup_fp_model(psrs, Tspan=None, inc_cp=False, nrncomps=30, ngwbcomps=30):
+def create_quantization_array(toas, dt=1, nmin=2):
+    """Create the per epoch quantization matrix and weights
+    for ECORR noise modeling. Weights are hardcoded to 1.0
+    """
+    isort = jnp.argsort(toas)
+
+    bucket_ref = [toas[isort[0]]]
+    bucket_ind = [[isort[0]]]
+
+    for i in isort[1:]:
+        if toas[i] - bucket_ref[-1] < dt:
+            bucket_ind[-1].append(i)
+        else:
+            bucket_ref.append(toas[i])
+            bucket_ind.append([i])
+
+    bucket_ind2 = [ind for ind in bucket_ind if len(ind) >= nmin]
+    weights = jnp.ones(len(bucket_ind2))
+
+    return weights
+
+
+def ecorr_weights_by_backend(psr):
+    """Divide up the quantization weights array by receiver backend.
+    """
+    weights = []
+
+    backends = np.unique(psr.backend_flags)
+    for val in backends:
+        mask = psr.backend_flags == val
+        weights.append(create_quantization_array(psr.toas[jnp.nonzero(mask)]))
+
+    return weights
+
+
+def setup_fp_model(
+    psrs, noise, Tspan=None, add_ecorr=False, nrncomps=30, add_curn=False, ngwbcomps=5
+):
     """Create the NMFP object and its component red-noise containers.
     If Tspan is None, the red-noise bases are set inidividually. If
     Tspan is a set value, all pulsar red noises bases are set to be
     the same.
     """
-    if inc_cp:
-        Tspan = get_tspan(psrs)
-        Ffreqs_curn = create_freqarray(Tspan, ncomps=ngwbcomps)
+    if add_curn:
+        tspan = get_tspan(psrs)
+        Ffreqs_curn = create_freqarray(tspan, ncomps=ngwbcomps)
         curn_obj = CURN_container(Ffreqs_curn)
+
+    if add_ecorr:
+        ecorr_objs = []
+        for psr in psrs:
+            weights = ecorr_weights_by_backend(psr)
+            ecorr_objs.append(GPEcorr_container(psr, weights, fix_wn_vals=noise))
 
     if not Tspan:
         Ffreqs = []
         for psr in psrs:
             Tspan = np.max(psr.toas) - np.min(psr.toas)
             Ffreqs.append(create_freqarray(Tspan, ncomps=nrncomps))
-        if inc_cp:
-            rn_objs = [
-                RN_container(
-                    psr, Ffreqs=Ffreqs[i], add_curn=True, curn_container=curn_obj
-                )
-                for i, psr in enumerate(psrs)
-            ]
+        if add_curn:
+            if add_ecorr:
+                rn_objs = [
+                    RN_container(
+                        psr,
+                        Ffreqs=Ffreqs[i],
+                        add_curn=True,
+                        curn_container=curn_obj,
+                        gp_ecorr=True,
+                        ecorr_container=ecorr_objs[i],
+                    )
+                    for i, psr in enumerate(psrs)
+                ]
+            else:
+                rn_objs = [
+                    RN_container(
+                        psr, Ffreqs=Ffreqs[i], add_curn=True, curn_container=curn_obj
+                    )
+                    for i, psr in enumerate(psrs)
+                ]
         else:
-            rn_objs = [
-                RN_container(psr, Ffreqs=Ffreqs[i]) for i, psr in enumerate(psrs)
-            ]
+            if add_ecorr:
+                rn_objs = [
+                    RN_container(
+                        psr,
+                        Ffreqs=Ffreqs[i],
+                        gp_ecorr=True,
+                        ecorr_container=ecorr_objs[i],
+                    )
+                    for i, psr in enumerate(psrs)
+                ]
+            else:
+                rn_objs = [
+                    RN_container(psr, Ffreqs=Ffreqs[i]) for i, psr in enumerate(psrs)
+                ]
     else:
-        Ffreqs = create_freqarray(Tspan, ncomps=nrncomps)
-        if inc_cp:
-            rn_objs = [
-                RN_container(psr, Ffreqs=Ffreqs, add_curn=True, curn_container=curn_obj)
-                for psr in psrs
-            ]
+        Ffreqs_rn = create_freqarray(Tspan, ncomps=nrncomps)
+        if add_curn:
+            if add_ecorr:
+                [
+                    RN_container(
+                        psr,
+                        Ffreqs=Ffreqs_rn,
+                        gp_ecorr=True,
+                        ecorr_container=ecorr_objs[i],
+                    )
+                    for i, psr in enumerate(psrs)
+                ]
+            else:
+                rn_objs = [
+                    RN_container(
+                        psr, Ffreqs=Ffreqs_rn, add_curn=True, curn_container=curn_obj
+                    )
+                    for psr in psrs
+                ]
         else:
-            rn_objs = [RN_container(psr, Ffreqs=Ffreqs) for psr in psrs]
+            if add_ecorr:
+                rn_objs = [
+                    RN_container(
+                        psr,
+                        Ffreqs=Ffreqs_rn,
+                        gp_ecorr=True,
+                        ecorr_container=ecorr_objs[i],
+                    )
+                    for i, psr in enumerate(psrs)
+                ]
+            else:
+                rn_objs = [RN_container(psr, Ffreqs=Ffreqs_rn) for psr in psrs]
 
     nmfp = NMFP(psrs, rn_objs)
     return nmfp
@@ -96,6 +187,7 @@ def main(
     noisefile,
     chainfile,
     savefile,
+    inc_ecorr=False,
     inc_cp=False,
     nrncomps=30,
     ngwbcomps=30,
@@ -136,10 +228,10 @@ def main(
     # create PTA and NMFP object
     Tspan = get_tspan(psrs)
     pta = initialize_pta(
-        psrs, noise, inc_cp=inc_cp, rn_comps=nrncomps, gwb_comps=ngwbcomps
+        psrs, noise, inc_cp=inc_cp, rn_comps=nrncomps, gwb_comps=ngwbcomps, inc_ecorr=inc_ecorr
     )
     nmfp = setup_fp_model(
-        psrs, Tspan=Tspan, inc_cp=inc_cp, nrncomps=nrncomps, ngwbcomps=ngwbcomps
+        psrs, Tspan=Tspan, inc_ecorr=inc_ecorr, inc_cp=inc_cp, nrncomps=nrncomps, ngwbcomps=ngwbcomps
     )
 
     # precompute some matrices
@@ -190,6 +282,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "savefile", type=str, help="filepath for output Fp values array"
     )
+    parser.add_argument("--inc_ecorr", action="store_true", help="include ECORR")
     parser.add_argument("--inc_cp", action="store_true", help="include CURN process")
     parser.add_argument(
         "--nrncomps",
