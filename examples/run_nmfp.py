@@ -133,7 +133,7 @@ def setup_fp_model(
         Ffreqs_rn = create_freqarray(Tspan, ncomps=nrncomps)
         if add_curn:
             if add_ecorr:
-                [
+                rn_objs = [
                     RN_container(
                         psr,
                         Ffreqs=Ffreqs_rn,
@@ -231,7 +231,7 @@ def main(
         psrs, noise, inc_cp=inc_cp, rn_comps=nrncomps, gwb_comps=ngwbcomps, inc_ecorr=inc_ecorr
     )
     nmfp = setup_fp_model(
-        psrs, Tspan=Tspan, inc_ecorr=inc_ecorr, inc_cp=inc_cp, nrncomps=nrncomps, ngwbcomps=ngwbcomps
+        psrs, noise, Tspan=Tspan, add_ecorr=inc_ecorr, add_curn=inc_cp, nrncomps=nrncomps, ngwbcomps=ngwbcomps
     )
 
     # precompute some matrices
