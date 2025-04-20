@@ -77,6 +77,8 @@ def setup_fp_model(
     If Tspan is None, the red-noise bases are set inidividually. If
     Tspan is a set value, all pulsar red noises bases are set to be
     the same.
+
+    TODO: Condense this function somehow
     """
     if add_curn:
         tspan = get_tspan(psrs)
@@ -139,6 +141,8 @@ def setup_fp_model(
                         Ffreqs=Ffreqs_rn,
                         gp_ecorr=True,
                         ecorr_container=ecorr_objs[i],
+                        add_curn=True,
+                        curn_container=curn_obj
                     )
                     for i, psr in enumerate(psrs)
                 ]
